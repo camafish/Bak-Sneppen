@@ -578,24 +578,38 @@ int run_shortlist(Master* master, Logger* logger){
 		i = i + shortlist_method(master);
 
 		if (max_iterations > 100 && i % (max_iterations/20) == 0){
+			// this is for taking a snapshot of the current information in case the simulation gets disrupted
+			// currently does every 5% of the runtime. Want to fully reconstruct the sim from the snapshot if needed
+
+			// probably should make this its own function?
+
+			// make a filename for this iteration's data
 			snprintf(path, 50, "/scratch/cafish/%ldbak_temp%d.txt", start_time,i*100/max_iterations);
 			//snprintf(path, 300, "C:\\Users\\Cameron\\OneDrive\\Math\\Research\\Bak Sneppen\\Code\\C\\To Upload\\%ldbak_temp%d.txt", start_time,i*100/max_iterations);
+
+			// save the current fitness values
 			ring_to_array(master->min_node, snapshot_array);
 
+			// open the file
 			FILE *fp;
 			fp = fopen(path, "a+");
+
+			// current iteration
 			fprintf(fp, "i = %llu\n", i);
 			
+			// write down seed and which rng we used
 			if (strcmp(rng, "mt") == 0){
 				fprintf(fp, "mt seed: %ld\n", seed);
 			} else if (strcmp(rng, "xoshiro") == 0){
 				fprintf(fp, "xoshiro seed: %ld\n", seed);
 			}
 
+			// record some info on the number of nodes, k, number of relists
 			fprintf(fp, "n: %d\n", master->number_of_nodes);
 			fprintf(fp, "k: %d\n", master->short_k);
 			fprintf(fp, "times relisted: %llu\n", master->relisted);
 
+			// record the current replacement frequencies list
 			fprintf(fp, "first 3k replacement frequencies: ");
 			fprintf(fp, "[");
 			for(int j = 0; j < 3*master->short_k - 1; j++){
@@ -605,6 +619,8 @@ int run_shortlist(Master* master, Logger* logger){
 			fprintf(fp, "]");
 			fprintf(fp, "\n");
 
+
+			// finally also write down the current fitnesses
 			fprintf(fp, "snapshot: [");
 			int j = 0;
 			while(j < logger->number_of_agents - 1){
@@ -617,6 +633,7 @@ int run_shortlist(Master* master, Logger* logger){
 			fclose(fp);
 		}
 
+		// after halfway, start recording samples (enough to have 500 total in the end)
 		if (logger->logging == 1){
 			if (i > max_iterations/2){
 				if (i % (max_iterations/(2*num_samples)) == 0){
