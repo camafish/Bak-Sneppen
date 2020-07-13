@@ -813,3 +813,5 @@ int main(int argc, char** argv){ // args should be {population, k, num_samples, 
     delete_master(master);
     delete_logger(logger);	
 }
+
+// alright if I add this comment?
