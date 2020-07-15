@@ -9,7 +9,7 @@ def read_file(f):
     # which are 
     # 'rng', 'seed', 'n', 'k', 'time', 'relisted', 'rank_freqs', 'samples'
     data = {}
-    fo = open(f, 'r')
+    fo = open(f.path, 'r')
 
     line = fo.readline()
     data['rng'] = line.split(": ")[0].split(' ')[0]
@@ -20,7 +20,7 @@ def read_file(f):
 
     line = fo.readline()
     data['k'] = int(line.split(": ")[1][:-1])
-
+ 
     line = fo.readline()
     data['time'] = int(line.split(": ")[1][:-1])
 
@@ -54,19 +54,26 @@ def read_file(f):
     fo.close()
     return data
 
-def make_histogram(samples, bins):
+def make_histogram(samples, bins, normalized=True):
     # given list of samples (real numbers) and number of bins, create list of numbers
     # where the ith value counts how many items from all samples are in the interval 
     # [i/bins, (i+1)/bins). e.g. if bins = 1000 then histogram[4] counts how many values
     # are in [4/1000, 5/1000). So more bins means more precise segregation of real values
+
+    # if normalized, scales values so that their integral is 1, normalized by default
+
     nsamples = len(samples)
-    pop = len(samples[0])
+    population = len(samples[0])
 
     histogram = [0 for i in range(bins)]
 
     for i in range(nsamples):
-        for j in range(pop):
+        for j in range(population):
             histogram[int(bins*samples[i][j])] += 1
+
+    if normalized:
+        for i in range(bins):
+            histogram[i] = float(histogram[i]) * (bins/(population*nsamples))
     
     return histogram
 
@@ -79,11 +86,6 @@ def hist_to_dist(histogram, population, nsamples):
         dist[i] = (bins*float(histogram[i]))/(population*nsamples)
     
     return dist
-
-def get_dist(data, bins):
-    # given data dict, applies make_histogram and hist_to_dist to get a frequency distribution of fitness values
-    # from the many samples found in data
-    return hist_to_dist(make_histogram(data['samples'], bins), data['n'], len(data['samples']))
 
 def est_threshold_1(dist):
     # estimates threshold by finding the first index with frequency crossing 1.5
@@ -112,15 +114,40 @@ def est_thresholds(trials, bins):
     # create list of all pairs of thresholds
     out = []
     for data in trials:
-        dist = get_dist(data, bins)
+        dist = make_histogram(data['sapmles'], bins)
         out.append([est_threshold_1(dist), est_threshold_2(dist)])
     return out
 
 def simple_plot(cells):
-    fig, axs = plt.subplots()
+    ___, axs = plt.subplots()
     axs.scatter(range(len(cells)), cells, c = 'red', s = 2, alpha = .5)
-    axs.set_ylim(0, 1)
-    plt.show()
+    axs.set_ylim(min(cells), max(cells))
+    return plt
+
+def make_pretty_plot(data, bins):
+    # given data from read_file, and a number of bins, determines thresholds and
+    # returns a plot of the fitnesses histogram as well as threshold values
+
+    dist = make_histogram(data['samples'], bins)
+
+    threshold1, threshold2 = est_threshold_1(dist), est_threshold_2(dist)
+
+    ___, axs = plt.subplots()
+    
+    xs = [x/bins for x in range(bins)]
+
+    axs.scatter(xs, dist, c = 'red', s = 2, alpha = .5)
+    axs.set_ylim(min(dist), max(dist))
+    axs.set_xlim(0, 1)
+
+    res = 50
+    plt.xticks([xs[res*i] for i in range(int(len(xs)/res))]+[1.0])
+
+    plt.xlabel('Value')
+    plt.ylabel('Frequency') 
+    plt.title("Fitnesses histogram for n = " + str(data['n']) + " and k ="+str(data['k'])+" with RNG = "+ str(data['rng']) + "\n x1* ~= " + str(threshold1)+ ", x2* ~= "+ str(threshold2)+ ", runtime ~= " +str(np.round(data['time']/60, 2)) + " minutes")
+
+    return plt
 
 def mean(ls):
     return sum(ls)/len(ls)
@@ -129,26 +156,30 @@ def stdev(ls):
     m = mean(ls)
     return (sum([(ls[i] - m)**2 for i in range(len(ls))])/len(ls))**(.5)
 
-path = "C:\\Users\\Cameron\\OneDrive\\Math\\Research\\Bak Sneppen\\Code\\C\\slurm_output"
+path = "C:\\Users\\Cameron\\OneDrive\\Math\\Research\\Bak Sneppen\\Code\\slurm_output"
 
 files = [item for item in os.scandir(path + "\\6400")]
 mt_files = [item for item in files if item.name[4] == 'm']
 xos_files = [item for item in files if item.name[4] == 'x']
 
-mt_trials = [read_file(mt_files[i]) for i in range(len(mt_files))]
-xos_trials = [read_file(xos_files[i]) for i in range(len(xos_files))]
+# mt_trials = [read_file(mt_files[i]) for i in range(len(mt_files))]
+# xos_trials = [read_file(xos_files[i]) for i in range(len(xos_files))]
 
-mt_thresholds = est_thresholds(mt_trials, 10000)
-xos_thresholds = est_thresholds(xos_trials, 10000)
+# mt_thresholds = est_thresholds(mt_trials, 1000)
+# xos_thresholds = est_thresholds(xos_trials, 1000)
 
-t = 1
+# t = 1
 
-print(mt_thresholds)
-print(xos_thresholds)
+# print(mt_thresholds)
+# print(xos_thresholds)
 
-print("mean of mt t2: " + str(mean([mt_thresholds[i][t] for i in range(len(mt_thresholds))])))
-print("stdev of mt t2: " + str(stdev([mt_thresholds[i][t] for i in range(len(mt_thresholds))])))
+# print("mean of mt t2: " + str(mean([mt_thresholds[i][t] for i in range(len(mt_thresholds))])))
+# print("stdev of mt t2: " + str(stdev([mt_thresholds[i][t] for i in range(len(mt_thresholds))])))
 
-print("mean of xos t2: " + str(mean([xos_thresholds[i][t] for i in range(len(xos_thresholds))])))
-print("stdev of xos t2 " + str(stdev([xos_thresholds[i][t] for i in range(len(xos_thresholds))])))
+# print("mean of xos t2: " + str(mean([xos_thresholds[i][t] for i in range(len(xos_thresholds))])))
+# print("stdev of xos t2 " + str(stdev([xos_thresholds[i][t] for i in range(len(xos_thresholds))])))
 
+#simple_plot(make_histogram(mt_trials[0]['samples'], 1000, True))
+
+plt = make_pretty_plot(read_file(mt_files[0]), 1000)
+plt.show()
