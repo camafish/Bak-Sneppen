@@ -162,27 +162,27 @@ def stdev(ls):
 
 path = "C:\\Users\\Cameron\\OneDrive\\Math\\Research\\Bak Sneppen\\Code\\slurm_output"
 
-n = 200
+n = 800
 bins = 1000
 
 files = [item for item in os.scandir(path + "\\" + str(n))]
 mt_files = [item for item in files if item.name[4] == 'm']
-#xos_files = [item for item in files if item.name[4] == 'x']
+xos_files = [item for item in files if item.name[4] == 'x']
 
 mt_trials = [read_file(mt_files[i]) for i in range(len(mt_files))]
-#xos_trials = [read_file(xos_files[i]) for i in range(len(xos_files))]
+xos_trials = [read_file(xos_files[i]) for i in range(len(xos_files))]
 
 mt_thresholds = est_thresholds(mt_trials, bins)
-#xos_thresholds = est_thresholds(xos_trials, bins)
+xos_thresholds = est_thresholds(xos_trials, bins)
 
 print(str(n))
 print("mt_thresholds: " + str(mt_thresholds))
 print("mean of mt: " + str(round(mean([mt_thresholds[i] for i in range(len(mt_thresholds))]), 1 + int(math.log10(bins)))))
 print("stdev of mt: " + str(round(stdev([mt_thresholds[i] for i in range(len(mt_thresholds))]), 1 + int(math.log10(bins)))))
 
-# print("xos_thresholds: " + str(xos_thresholds))
-# print("mean of xos: " + str(round(mean([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
-# print("stdev of xos: " + str(round(stdev([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
+print("xos_thresholds: " + str(xos_thresholds))
+print("mean of xos: " + str(round(mean([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
+print("stdev of xos: " + str(round(stdev([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
 
 #simple_plot(make_histogram(mt_trials[0]['samples'], 1000, True))
 
