@@ -3,6 +3,7 @@ import numpy as np
 import math
 import os
 
+
 def read_file(f):
     # given a reference to a slurm output file
     # return a dict with all relevant fields
@@ -87,14 +88,14 @@ def hist_to_dist(histogram, population, nsamples):
     
     return dist
 
-def est_threshold_1(dist):
+def threshold_index(dist):
     # estimates threshold by finding the first index with frequency crossing 1.5
     # reports that index/bins e.g. if bins=1000 then may return 665/1000 = .665
     t = 0
     bins = len(dist)
     while(dist[t] < 1.5 and t <= bins):
         t += 1
-    return t/bins
+    return t
 
 def est_threshold_2(dist):
     # estimates threshold by computing average height of 'flat' area of distribution
@@ -111,11 +112,11 @@ def est_threshold_2(dist):
 
 def est_thresholds(trials, bins):
     # given a bunch of files of trials identical but in seed
-    # create list of all pairs of thresholds
+    # create list of all threshold indices calculated
     out = []
     for data in trials:
-        dist = make_histogram(data['sapmles'], bins)
-        out.append([est_threshold_1(dist), est_threshold_2(dist)])
+        dist = make_histogram(data['samples'], bins)
+        out.append(threshold_index(dist)/bins)
     return out
 
 def simple_plot(cells):
@@ -130,7 +131,8 @@ def make_pretty_plot(data, bins):
 
     dist = make_histogram(data['samples'], bins)
 
-    threshold1, threshold2 = est_threshold_1(dist), est_threshold_2(dist)
+    threshold = threshold_index(dist)/bins
+    threshold_string = '{number:.{digits}f}'.format(number=threshold, digits=int(math.log10(bins)))
 
     ___, axs = plt.subplots()
     
@@ -140,12 +142,14 @@ def make_pretty_plot(data, bins):
     axs.set_ylim(min(dist), max(dist))
     axs.set_xlim(0, 1)
 
-    res = 50
+    res = int(bins/10) # bigger number is larger tick chunks
     plt.xticks([xs[res*i] for i in range(int(len(xs)/res))]+[1.0])
 
     plt.xlabel('Value')
     plt.ylabel('Frequency') 
-    plt.title("Fitnesses histogram for n = " + str(data['n']) + " and k ="+str(data['k'])+" with RNG = "+ str(data['rng']) + "\n x1* ~= " + str(threshold1)+ ", x2* ~= "+ str(threshold2)+ ", runtime ~= " +str(np.round(data['time']/60, 2)) + " minutes")
+    plt.title("Fitnesses histogram for n = " + str(data['n']) + " and k = "+str(data['k'])+" with RNG = "+ str(data['rng']) + "\n x* ~= " + threshold_string+ ", runtime ~= " +str(np.round(data['time']/60, 2)) + " minutes")
+    plt.axvline(x=threshold)
+    plt.text(threshold + .01 , .5, "x* ~= " + threshold_string)
 
     return plt
 
@@ -158,28 +162,29 @@ def stdev(ls):
 
 path = "C:\\Users\\Cameron\\OneDrive\\Math\\Research\\Bak Sneppen\\Code\\slurm_output"
 
-files = [item for item in os.scandir(path + "\\6400")]
+n = 200
+bins = 1000
+
+files = [item for item in os.scandir(path + "\\" + str(n))]
 mt_files = [item for item in files if item.name[4] == 'm']
-xos_files = [item for item in files if item.name[4] == 'x']
+#xos_files = [item for item in files if item.name[4] == 'x']
 
-# mt_trials = [read_file(mt_files[i]) for i in range(len(mt_files))]
-# xos_trials = [read_file(xos_files[i]) for i in range(len(xos_files))]
+mt_trials = [read_file(mt_files[i]) for i in range(len(mt_files))]
+#xos_trials = [read_file(xos_files[i]) for i in range(len(xos_files))]
 
-# mt_thresholds = est_thresholds(mt_trials, 1000)
-# xos_thresholds = est_thresholds(xos_trials, 1000)
+mt_thresholds = est_thresholds(mt_trials, bins)
+#xos_thresholds = est_thresholds(xos_trials, bins)
 
-# t = 1
+print(str(n))
+print("mt_thresholds: " + str(mt_thresholds))
+print("mean of mt: " + str(round(mean([mt_thresholds[i] for i in range(len(mt_thresholds))]), 1 + int(math.log10(bins)))))
+print("stdev of mt: " + str(round(stdev([mt_thresholds[i] for i in range(len(mt_thresholds))]), 1 + int(math.log10(bins)))))
 
-# print(mt_thresholds)
-# print(xos_thresholds)
-
-# print("mean of mt t2: " + str(mean([mt_thresholds[i][t] for i in range(len(mt_thresholds))])))
-# print("stdev of mt t2: " + str(stdev([mt_thresholds[i][t] for i in range(len(mt_thresholds))])))
-
-# print("mean of xos t2: " + str(mean([xos_thresholds[i][t] for i in range(len(xos_thresholds))])))
-# print("stdev of xos t2 " + str(stdev([xos_thresholds[i][t] for i in range(len(xos_thresholds))])))
+# print("xos_thresholds: " + str(xos_thresholds))
+# print("mean of xos: " + str(round(mean([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
+# print("stdev of xos: " + str(round(stdev([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
 
 #simple_plot(make_histogram(mt_trials[0]['samples'], 1000, True))
 
-plt = make_pretty_plot(read_file(mt_files[0]), 1000)
-plt.show()
+# plt = make_pretty_plot(read_file(mt_files[1]), 10000)
+# plt.show()

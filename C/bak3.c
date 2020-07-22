@@ -13,6 +13,7 @@ typedef struct Logger { // holds samples and other data
 	int num_samples;
 	int number_of_agents;
 	int logging;
+	int backup;
 	uint32_t seed;
 	unsigned long long max_iterations;
 } Logger;
@@ -577,7 +578,7 @@ int run_shortlist(Master* master, Logger* logger){
 	while (i < max_iterations){
 		i = i + shortlist_method(master);
 
-		if (max_iterations > 100 && i % (max_iterations/20) == 0){
+		if (logger->backup && max_iterations > 100 && i % (max_iterations/20) == 0){
 			// this is for taking a snapshot of the current information in case the simulation gets disrupted
 			// currently does every 5% of the runtime. Want to fully reconstruct the sim from the snapshot if needed
 
@@ -784,6 +785,7 @@ int main(int argc, char** argv){ // args should be {population, k, num_samples, 
     }
 
 	Logger* logger = create_logger(number_of_agents, number_of_samples, max_iterations, 1);
+	logger->backup = 1;
 
     // set up the rng that we chose (similar strcmps appear in the building and running as well)
     if (strcmp(rng, "mt") == 0){
@@ -793,13 +795,13 @@ int main(int argc, char** argv){ // args should be {population, k, num_samples, 
 		logger->seed = seed;
         //pprint(genrand64_real1());
     } else if (strcmp(rng, "xoshiro") == 0){
-        uint64_t seed = time(0);
-        printf("xoshiro seed: %ld\n", seed);
-        s[0] = split(seed);
-        s[1] = split(seed);
-        s[2] = split(seed);
-        s[3] = split(seed);
-		logger->seed = seed;
+        tosplit = time(0);
+        printf("xoshiro seed: %ld\n", tosplit);
+        s[0] = split();
+        s[1] = split();
+        s[2] = split();
+        s[3] = split();
+		logger->seed = tosplit;
         //pprint(next_real());
     }
      
@@ -814,4 +816,3 @@ int main(int argc, char** argv){ // args should be {population, k, num_samples, 
     delete_logger(logger);	
 }
 
-// alright if I add this comment?

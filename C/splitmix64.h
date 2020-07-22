@@ -15,10 +15,10 @@ See <http://creativecommons.org/publicdomain/zero/1.0/>. */
    It is a very fast generator passing BigCrush, and it can be useful if
    for some reason you absolutely want 64 bits of state. */
 
-static uint64_t x; /* The state can be seeded with any value. */
+static uint64_t tosplit; /* The state can be seeded with any value. */
 
 uint64_t split() {
-	uint64_t z = (x += 0x9e3779b97f4a7c15);
+	uint64_t z = (tosplit += 0x9e3779b97f4a7c15);
 	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
 	z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
 	return z ^ (z >> 31);
