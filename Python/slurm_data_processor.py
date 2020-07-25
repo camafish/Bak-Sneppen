@@ -119,6 +119,7 @@ def est_thresholds(trials, bins):
         out.append(threshold_index(dist)/bins)
     return out
 
+
 def simple_plot(cells):
     ___, axs = plt.subplots()
     axs.scatter(range(len(cells)), cells, c = 'red', s = 2, alpha = .5)
@@ -160,31 +161,130 @@ def stdev(ls):
     m = mean(ls)
     return (sum([(ls[i] - m)**2 for i in range(len(ls))])/len(ls))**(.5)
 
+def rescale_alphas(alphas):
+    n = len(alphas)
+    
+    k = int(n/3)
+
+    tail_avg = mean(alphas[2*k:]) # what is a principled choice for this cutoff?
+    total_replacements = sum(alphas) + (n - 3*k)*tail_avg 
+    scaling_factor = 3/total_replacements
+    return [scaling_factor*alphas[i] for i in range(n)]
+
+def estimate_p(data):
+    n = data['n']
+    k = data['k']
+    alphas = data['rank_freqs']
+
+    # first get average number of replacements over interval (k, 3k]
+    tail_avg = mean(alphas[k:3*k - 1])   #off by one because indexing
+    # next compute an estimate of the total replacements, assuming a flat tail with value tail_avg
+    total_replacements = sum(alphas[0:3*k - 1]) + (n - 3*k)*tail_avg       #off by one because indexing
+    # need to rescale the tail average 
+    rescaled_tail = tail_avg*3/total_replacements 
+    # we can now estimate p from [veerman prieto 2018 pg 25]
+    p = 3 - rescaled_tail*(n - k)
+
+    # print(tail_avg)
+    # print(total_replacements)
+    # print(rescaled_tail)
+    # print(p)
+
+    return p
+
+def get_p(files):
+    out = []
+    for i in range(len(files)):
+        data = read_file(files[i])
+        out.append(estimate_p(data))
+    return out
+
+def estimate_kp(alphas, p):
+    kp = 0
+    kp_sum = 0
+    while kp_sum <= p and kp < len(alphas):
+        kp_sum += alphas[kp]
+        kp += 1
+    return kp
+
+
 path = "C:\\Users\\Cameron\\OneDrive\\Math\\Research\\Bak Sneppen\\Code\\slurm_output"
 
 n = 800
-bins = 1000
+bins = 10000
 
 files = [item for item in os.scandir(path + "\\" + str(n))]
 mt_files = [item for item in files if item.name[4] == 'm']
-xos_files = [item for item in files if item.name[4] == 'x']
+#xos_files = [item for item in files if item.name[4] == 'x']
 
-mt_trials = [read_file(mt_files[i]) for i in range(len(mt_files))]
-xos_trials = [read_file(xos_files[i]) for i in range(len(xos_files))]
+def get_thresholds(files, bins):
+    out = []
+    for i in range(len(files)):
+        out.append(threshold_index(make_histogram(read_file(files[i])['samples'], bins))/bins)
+    return out
 
-mt_thresholds = est_thresholds(mt_trials, bins)
-xos_thresholds = est_thresholds(xos_trials, bins)
+data = read_file(mt_files[0])
 
-print(str(n))
-print("mt_thresholds: " + str(mt_thresholds))
-print("mean of mt: " + str(round(mean([mt_thresholds[i] for i in range(len(mt_thresholds))]), 1 + int(math.log10(bins)))))
-print("stdev of mt: " + str(round(stdev([mt_thresholds[i] for i in range(len(mt_thresholds))]), 1 + int(math.log10(bins)))))
 
-print("xos_thresholds: " + str(xos_thresholds))
-print("mean of xos: " + str(round(mean([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
-print("stdev of xos: " + str(round(stdev([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
+kp = estimate_kp(rescale_alphas(data['rank_freqs']), 2.8)
 
-#simple_plot(make_histogram(mt_trials[0]['samples'], 1000, True))
+def dels(alphas, p, n): 
+    # given an p, compute differences between true alphas and estimate based on p. We have that the true p is the smallest
+    # p such that lim n->infty of n* +/-del = 0
+    kp = estimate_kp(alphas, p)
+    diffs = [alphas[i] - (3 - p)/(n - kp) for i in range(kp, len(alphas))]
+    return (max(diffs), min(diffs)) 
 
-# plt = make_pretty_plot(read_file(mt_files[1]), 10000)
+def possible_ps(data):
+    # gets a vertical slice of fig 4.6 in wagner, run this on a variety of ns to observe the limit in order to estimate p
+    alphas = rescale_alphas(data['rank_freqs'])
+    n = data['n']
+    out = []
+    ps = np.linspace(1.5,2.5,3)
+    for p in ps:
+        ds = dels(alphas, p, n)
+        out.append((n, p, n*ds[0], n*ds[1]))
+    return out
+
+#print(possible_ps(data))
+
+# plt = simple_plot(rescale_alphas(data['rank_freqs']))
+# plt.axvline(x=kp)
+# plt.show()
+
+
+#print(rescale_alphas(read_file(mt_files[0])['rank_freqs']))
+
+# ps = get_p(mt_files)
+
+# print(str(n))
+# print("ps: " + str(ps))
+# print("mean of ps: " + str(mean(ps)) )
+# print("stdev of ps: "+ str(stdev(ps)))
+
+
+#mt_thresholds = get_thresholds(mt_files, bins)
+
+# mt_trials1 = [read_file(mt_files[i]) for i in [0,1,2,3,4]]
+
+# print(str(n))
+# print("mt_thresholds: " + str(mt_thresholds))
+# print("mean of mt: " + str(round(mean([mt_thresholds[i] for i in range(len(mt_thresholds))]), 1 + int(math.log10(bins)))))
+# print("stdev of mt: " + str(round(stdev([mt_thresholds[i] for i in range(len(mt_thresholds))]), 1 + int(math.log10(bins)))))
+
+# print("xos_thresholds: " + str(xos_thresholds))
+# print("mean of xos: " + str(round(mean([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
+# print("stdev of xos: " + str(round(stdev([xos_thresholds[i] for i in range(len(xos_thresholds))]), 1 + int(math.log10(bins)))))
+
+# plt = simple_plot(rescale_alphas(read_file(mt_files[0])['rank_freqs']))
+# plt.axvline(x=24)
+# plt.show()
+
+data = read_file(mt_files[0])['rank_freqs']
+
+print(sum([data[i]/data[0] for i in range(len(data))]))
+
+#print(len(read_file(mt_files[0])['rank_freqs']))
+
+# plt = make_pretty_plot(read_file(mt_files[0]), bins)
 # plt.show()
