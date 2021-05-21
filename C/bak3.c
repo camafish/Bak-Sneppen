@@ -16,6 +16,7 @@ typedef struct Logger { // holds samples and other data
 	int backup;
 	uint32_t seed;
 	unsigned long long max_iterations;
+	unsigned long long starting_iteration;
 } Logger;
 
 typedef struct Node { // these are linked up into a circular ring, holding all fitness values
@@ -476,6 +477,7 @@ Logger* create_logger(int number_of_agents, int number_of_samples, unsigned long
 	logger->num_samples = number_of_samples;
 	logger->number_of_agents = number_of_agents;
 	logger->max_iterations = max_iterations;
+	logger->starting_iteration = 0;
 
 	// initialize array of arrays to hold samples
 	logger->samples = calloc(logger->num_samples, sizeof(double*));
@@ -573,7 +575,7 @@ int run_shortlist(Master* master, Logger* logger){
 	char* rng = master->rng ;
 	uint32_t seed = logger->seed;
 	
-	unsigned long long i = 0; // current iteration
+	unsigned long long i = logger->starting_iteration; // current iteration
 	unsigned long long k = 0; // sample counter
 	while (i < max_iterations){
 		i = i + shortlist_method(master);
@@ -766,53 +768,243 @@ int main(int argc, char** argv){ // args should be {population, k, num_samples, 
 
     int more = 1; // if 1 then full samples information is printed
 
-    if (argc == 5){ // if we specified arguments then set them
-        number_of_agents = atoi(argv[1]);
-        max_iterations = 2*(pow(number_of_agents,3));
-        short_k = atoi(argv[2]);
-        number_of_samples = atoi(argv[3]);	
-        if (strcmp(argv[4], "mt") == 0){
+	if (strcmp(argv[1], "-r") == 0){ // use BAK -r [FILENAME] to restart a run from a log file
+		char path[300];
+		char line[563200];
+		int rawseed = 0;
+		char rngstring[20];
+		char freqstring[10000];
+
+		char tmp[20];
+		unsigned long long iterations;
+		int relisted;
+		FILE* fp;
+
+		
+		
+		//snprintf(path, sizeof path, "C:\\Users\\Cameron\\OneDrive\\Math\\Research\\Bak Sneppen\\Code\\slurm_output\\25600\\%s", argv[2]);
+		snprintf(path, sizeof path, "/home/cafish/BAK/logs/%s", argv[2]);
+		//printf("%s", path);
+
+		fp = fopen(path, "r");
+		
+		// first get rng name
+		//fscanf(fp, "%s %s: %s", rng, tmp, seedstring);
+		// printf("%s\n", rng);
+		// printf("%s\n", tmp);
+		// printf("%s\n", seedstring);
+		
+		// first get iterations
+		fgets(line, sizeof line, fp);
+		sscanf(line, "i = %s\n", tmp);
+		char* ullEnd;
+		iterations = strtoull(tmp, &ullEnd, 10);
+		snprintf(tmp, sizeof tmp, "                    ");
+
+		// next get seed and rng
+		fgets(line, sizeof line, fp);
+		sscanf(line, "%s seed: %d\n", rngstring, &rawseed);
+		
+		// next get n and k and times relisted
+		fgets(line, sizeof line, fp);
+		sscanf(line, "n: %d\n", &number_of_agents);
+		fgets(line, sizeof line, fp);
+		sscanf(line, "k: %d\n", &short_k);
+		fgets(line, sizeof line, fp);
+		sscanf(line, "times relisted: %d\n", &relisted);
+
+		// get replacement frequencies
+		fgets(line, sizeof line, fp);
+		sscanf(line, "first 3k replacement frequencies: %s\n", freqstring);
+
+//		unsigned long long freqs[100];
+		unsigned long long * freqs = calloc(3*short_k, sizeof(unsigned long long));
+		int i = 1;
+		int j = 0;
+		int k = 0;
+		unsigned long long ull = 0;
+		char tempstr[40];
+		
+		while(freqstring[i] != ']' ){
+			while(freqstring[i] != ',' && freqstring[i] != ']'){
+				tempstr[j] = freqstring[i];
+				i++;
+				j++;
+			}
+			while(j<40){	
+				tempstr[j] = ' ';
+				j++;
+			}
+			j = 0;
+
+			ull = strtoull(tempstr, NULL, 10);
+			freqs[k] = ull;
+			//printf("%llu\n", freqs[k]);
+			k++;
+			
+			if(freqstring[i] != ']'){
+				i++;	
+			}			
+		}
+
+		// get snapshot 
+		fgets(line, sizeof line, fp);
+
+		// for(int e=11;e<30;e++){
+		// 	printf("%c\n", line[e]);
+		// }
+
+		double snapshot[25600];
+		i = 11;
+		j = 0;
+		k = 0;
+		double fitness = 0;
+		char tempstr2[20];
+		
+		while(line[i] != ']' ){
+			while(line[i] != ';' && line[i] != ']'){
+				tempstr2[j] = line[i];
+				//printf("%c\n", tempstr2[j]);
+				i++;
+				j++;
+			}
+			while(j<20){	
+				tempstr2[j] = ' ';
+				j++;
+			}
+			j = 0;
+
+			
+			fitness = strtod(tempstr2, NULL);
+			snapshot[k] = fitness;
+			//printf("%.*lf\n", 17, snapshot[k]);
+			k++;
+
+			if(line[i] != ']'){
+				i++;
+				i++;	
+			}		
+		}
+		
+		
+
+		//printf("%s\n", line);
+		
+		printf("iters: %llu\n",iterations);
+		printf("rng: %s\n", rngstring);
+		printf("seed: %d\n",rawseed);
+		printf("n: %d\n", number_of_agents);
+		printf("k: %d\n", short_k);
+		printf("times relisted: %d\n", relisted);
+		printf("first replacement freq: %llu\n", freqs[0]);
+		printf("number of snapshot values read: %d\n", k);
+
+		fclose(fp);
+
+		// have number_of_agents
+		max_iterations = 2*(pow(number_of_agents,3)) - iterations;
+		// have short_k
+		number_of_samples = 500;
+
+		// from here proceed to create the logger etc
+		// still need to set the seed properly
+
+		Logger* logger = create_logger(number_of_agents, number_of_samples, max_iterations, 1);
+		logger->backup = 1;
+		logger->starting_iteration = iterations;
+
+		double dummyvals[3];
+		unsigned long long m = 0;
+
+		if (strcmp(rngstring, "mt") == 0){
             rng = "mt";
-        } else if (strcmp(argv[4], "xoshiro") == 0){
+			uint32_t seed = rawseed;
+			init_genrand64(seed);
+			logger->seed = seed;
+
+			for(m = 0; m <= iterations; m++){
+				dummyvals[0] = genrand64_real1();
+				dummyvals[1] = genrand64_real1();
+				dummyvals[2] = genrand64_real1();
+			}
+        } else if (strcmp(rngstring, "xoshiro") == 0){
             rng = "xoshiro";
+			tosplit = rawseed;
+			s[0] = split();
+			s[1] = split();
+			s[2] = split();
+			s[3] = split();
+			logger->seed = tosplit;
+
+			for(m = 0; m <= iterations; m++){
+				dummyvals[0] = next_real();
+				dummyvals[1] = next_real();
+				dummyvals[2] = next_real();
+			}
         }
-    } else { // otherwise some default options
-        number_of_agents = 100;
-        max_iterations = 2*(pow(number_of_agents,3));
-        short_k = 5;
-        number_of_samples = 10;	
-        rng = "mt";
-    }
 
-	Logger* logger = create_logger(number_of_agents, number_of_samples, max_iterations, 1);
-	logger->backup = 1;
+		printf("ready to start!\n");
+		
+		Master* master = create_master(number_of_agents, short_k, rng);
+		linkup_shortlist(master);
+		
+		int time = run_shortlist(master, logger);
+		print_out(master, logger, time, more);
+		
+		delete_master(master);
+		delete_logger(logger);	
 
-    // set up the rng that we chose (similar strcmps appear in the building and running as well)
-    if (strcmp(rng, "mt") == 0){
-        uint32_t seed = time(0);
-        init_genrand64(seed);
-        printf("mt seed: %ld\n",seed);
-		logger->seed = seed;
-        //pprint(genrand64_real1());
-    } else if (strcmp(rng, "xoshiro") == 0){
-        tosplit = time(0);
-        printf("xoshiro seed: %ld\n", tosplit);
-        s[0] = split();
-        s[1] = split();
-        s[2] = split();
-        s[3] = split();
-		logger->seed = tosplit;
-        //pprint(next_real());
-    }
-     
-    Master* master = create_master(number_of_agents, short_k, rng);
-    linkup_shortlist(master);
-    
+	} else {
+
+		if (argc == 5){ // if we specified arguments then set them
+			number_of_agents = atoi(argv[1]);
+			max_iterations = 2*(pow(number_of_agents,3));
+			short_k = atoi(argv[2]);
+			number_of_samples = atoi(argv[3]);	
+			if (strcmp(argv[4], "mt") == 0){
+				rng = "mt";
+			} else if (strcmp(argv[4], "xoshiro") == 0){
+				rng = "xoshiro";
+			}
+		} else { // otherwise some default options
+			number_of_agents = 100;
+			max_iterations = 2*(pow(number_of_agents,3));
+			short_k = 5;
+			number_of_samples = 10;	
+			rng = "mt";
+		}
+
+		Logger* logger = create_logger(number_of_agents, number_of_samples, max_iterations, 1);
+		logger->backup = 1;
+
+		// set up the rng that we chose (similar strcmps appear in the building and running as well)
+		if (strcmp(rng, "mt") == 0){
+			uint32_t seed = time(0);
+			init_genrand64(seed);
+			printf("mt seed: %ld\n",seed);
+			logger->seed = seed;
+			//pprint(genrand64_real1());
+		} else if (strcmp(rng, "xoshiro") == 0){
+			tosplit = time(0);
+			printf("xoshiro seed: %ld\n", tosplit);
+			s[0] = split();
+			s[1] = split();
+			s[2] = split();
+			s[3] = split();
+			logger->seed = tosplit;
+			//pprint(next_real());
+		}
+		
+		Master* master = create_master(number_of_agents, short_k, rng);
+		linkup_shortlist(master);
+		
+		
+		int time = run_shortlist(master, logger);
+		print_out(master, logger, time, more);
+		
+		delete_master(master);
+		delete_logger(logger);	
+	}
 	
-    int time = run_shortlist(master, logger);
-    print_out(master, logger, time, more);
-    
-    delete_master(master);
-    delete_logger(logger);	
 }
 
